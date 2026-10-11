@@ -1,10 +1,10 @@
 import { useCallback, useEffect, useState } from "react";
 import { api, ApiError } from "./api/client";
-import type { Actor, AuditLog, Meta, Task } from "./api/types";
+import type { Actor, AuditLog, Meta, Task, TaskStatus } from "./api/types";
 import { ActorSelect } from "./components/ActorSelect";
 import { TaskForm } from "./components/TaskForm";
 import { TaskList } from "./components/TaskList";
-import { STATUS_LABELS, nextStatus } from "./lib/format";
+import { STATUS_LABELS } from "./lib/format";
 
 function errorMessage(err: unknown): string {
   return err instanceof Error ? err.message : "Something went wrong.";
@@ -84,15 +84,14 @@ export default function App() {
     }
   }
 
-  async function handleAdvance(task: Task) {
-    const next = nextStatus(task.status);
-    if (!next) return;
+  async function handleChangeStatus(task: Task, status: TaskStatus) {
+    if (status === task.status) return;
     setBusy(task.id, true);
     setNotice(null);
     try {
-      const result = await api.changeStatus(task.id, next, actorId);
+      const result = await api.changeStatus(task.id, status, actorId);
       if (!result.changed) {
-        setNotice(`"${task.title}" is already ${STATUS_LABELS[next]}.`);
+        setNotice(`"${task.title}" is already ${STATUS_LABELS[status]}.`);
       }
       await refreshAfterMutation(task.id);
     } catch (err) {
@@ -133,7 +132,7 @@ export default function App() {
       <header className="page-header">
         <div>
           <h1>Mini Task Manager</h1>
-          <p className="muted small">Status moves one step at a time: To Do → Pending → In Progress → Done.</p>
+          <p className="muted small">Change a task's status freely; every change is recorded in its history.</p>
         </div>
         {meta && <ActorSelect actors={actors} value={actorId} onChange={setActorId} />}
       </header>
@@ -162,7 +161,7 @@ export default function App() {
                 expandedIds={expandedIds}
                 auditByTask={auditByTask}
                 auditErrors={auditErrors}
-                onAdvance={handleAdvance}
+                onChangeStatus={handleChangeStatus}
                 onDelete={handleDelete}
                 onToggleAudit={handleToggleAudit}
               />

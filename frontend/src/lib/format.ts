@@ -9,12 +9,6 @@ export const STATUS_LABELS: Record<TaskStatus, string> = {
 
 export const STATUS_ORDER: TaskStatus[] = ["to_do", "pending", "in_progress", "done"];
 
-/** Next status in the flow, or null when already done. */
-export function nextStatus(status: TaskStatus): TaskStatus | null {
-  const index = STATUS_ORDER.indexOf(status);
-  return STATUS_ORDER[index + 1] ?? null;
-}
-
 /** Format waktu lokal: "2025-01-01 10:00" */
 export function formatDateTime(iso: string): string {
   const d = new Date(iso);

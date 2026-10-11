@@ -51,12 +51,29 @@ test("update ke status yang sama tidak membuat audit log baru", async () => {
   assert.equal(service.listAuditLogs(task.id).length, 2);
 });
 
-test("transisi yang melanggar alur ditolak dan tidak mengubah data", async () => {
+test("status dapat berpindah ke status mana pun, termasuk mundur dan lompat", async () => {
   const { service } = await createTestContext();
   const task = await service.createTask({ title: "Task C", actor: "john.doe" });
-  await expectAppError(service.changeStatus(task.id, "done", "john.doe"), "INVALID_TRANSITION");
-  assert.equal(service.getTask(task.id).status, "to_do");
-  assert.equal(service.listAuditLogs(task.id).length, 1);
+  await service.changeStatus(task.id, "in_progress", "jane.smith");
+  const back = await service.changeStatus(task.id, "pending", "budi.santoso");
+  assert.equal(back.changed, true);
+  assert.equal(service.getTask(task.id).status, "pending");
+  await service.changeStatus(task.id, "done", "john.doe");
+  const reopened = await service.changeStatus(task.id, "to_do", "sari.wijaya");
+  assert.equal(reopened.task.status, "to_do");
+
+  const logs = service.listAuditLogs(task.id);
+  assert.deepEqual(
+    logs.map((l) => [l.fromStatus, l.toStatus]),
+    [
+      [null, "to_do"],
+      ["to_do", "in_progress"],
+      ["in_progress", "pending"],
+      ["pending", "done"],
+      ["done", "to_do"],
+    ],
+  );
+  assert.equal(service.verifyAuditIntegrity().valid, true);
 });
 
 test("validasi input: judul kosong, status tidak dikenal, actor tidak dikenal", async () => {

@@ -1,7 +1,7 @@
 import { Fragment } from "react";
-import type { AuditLog, Task } from "../api/types";
+import type { AuditLog, Task, TaskStatus } from "../api/types";
 import { AuditLogPanel } from "./AuditLogPanel";
-import { STATUS_LABELS, STATUS_ORDER, formatDateTime, nextStatus } from "../lib/format";
+import { STATUS_LABELS, STATUS_ORDER, formatDateTime } from "../lib/format";
 
 interface Props {
   tasks: Task[];
@@ -9,7 +9,7 @@ interface Props {
   expandedIds: Set<string>;
   auditByTask: Record<string, AuditLog[] | undefined>;
   auditErrors: Record<string, string | null>;
-  onAdvance: (task: Task) => void;
+  onChangeStatus: (task: Task, status: TaskStatus) => void;
   onDelete: (task: Task) => void;
   onToggleAudit: (task: Task) => void;
 }
@@ -31,7 +31,6 @@ export function TaskList(props: Props) {
       </thead>
       <tbody>
         {props.tasks.map((task) => {
-          const next = nextStatus(task.status);
           const busy = props.busyTaskIds.has(task.id);
           const expanded = props.expandedIds.has(task.id);
           return (
@@ -43,18 +42,21 @@ export function TaskList(props: Props) {
                 </td>
                 <td>
                   <StatusBadge status={task.status} />
-                  <StatusStepper current={task.status} />
                 </td>
                 <td className="small">{formatDateTime(task.updatedAt)}</td>
                 <td className="actions">
-                  <button
-                    type="button"
-                    disabled={busy || next === null}
-                    onClick={() => props.onAdvance(task)}
-                    title={next ? `Move to ${STATUS_LABELS[next]}` : "Task already done"}
+                  <select
+                    aria-label={`Change status of ${task.title}`}
+                    value={task.status}
+                    disabled={busy}
+                    onChange={(e) => props.onChangeStatus(task, e.target.value as TaskStatus)}
                   >
-                    {next ? `→ ${STATUS_LABELS[next]}` : "Completed"}
-                  </button>
+                    {STATUS_ORDER.map((status) => (
+                      <option key={status} value={status}>
+                        {STATUS_LABELS[status]}
+                      </option>
+                    ))}
+                  </select>
                   <button type="button" className="secondary" onClick={() => props.onToggleAudit(task)}>
                     {expanded ? "Hide history" : "History"}
                   </button>
@@ -84,19 +86,4 @@ export function TaskList(props: Props) {
 
 export function StatusBadge({ status }: { status: Task["status"] }) {
   return <span className={`badge badge-${status}`}>{STATUS_LABELS[status]}</span>;
-}
-
-function StatusStepper({ current }: { current: Task["status"] }) {
-  const currentIndex = STATUS_ORDER.indexOf(current);
-  return (
-    <ol className="stepper" aria-label={`Progress: ${STATUS_LABELS[current]}`}>
-      {STATUS_ORDER.map((status, index) => (
-        <li
-          key={status}
-          className={index <= currentIndex ? "reached" : ""}
-          title={STATUS_LABELS[status]}
-        />
-      ))}
-    </ol>
-  );
 }

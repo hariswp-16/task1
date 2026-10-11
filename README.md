@@ -1,6 +1,6 @@
 # Mini Task Manager
 
-Aplikasi sederhana untuk tim internal: membuat task, mengubah status secara berurutan, dan melihat **audit log per task** yang tidak bisa diubah atau dihapus.
+Aplikasi sederhana untuk tim internal: membuat task, mengubah status ke status mana pun (termasuk kembali atau melompat), dan melihat **audit log per task** yang tidak bisa diubah atau dihapus.
 
 - **Frontend**: React 19 + TypeScript + Vite
 - **Backend**: Node.js + Express 5 + TypeScript
@@ -37,7 +37,7 @@ Perintah lain:
 
 | Lokasi     | Perintah            | Keterangan                                |
 |------------|---------------------|-------------------------------------------|
-| backend    | `npm test`          | 15 test: domain, service, API, persistence |
+| backend    | `npm test`          | 14 test: domain, service, API, persistence |
 | backend    | `npm run typecheck` | Type check tanpa build                    |
 | frontend   | `npm run build`     | Type check + build production             |
 
@@ -79,7 +79,7 @@ Alurnya satu arah: **route → service → database**. Route hanya memetakan HTT
 | GET    | `/api/tasks/:id/audit-logs`   | Riwayat task, urut kronologis                           |
 | GET    | `/api/audit-logs/verify`      | Cek integritas hash chain                               |
 
-Error berbentuk `{ error: { code, message, details? } }` dengan kode `VALIDATION_ERROR` (400), `NOT_FOUND` (404), `INVALID_TRANSITION` (409), `INTERNAL_ERROR` (500).
+Error berbentuk `{ error: { code, message, details? } }` dengan kode `VALIDATION_ERROR` (400), `NOT_FOUND` (404), `INTERNAL_ERROR` (500).
 
 ### Alur status
 
@@ -87,7 +87,7 @@ Error berbentuk `{ error: { code, message, details? } }` dengan kode `VALIDATION
 to_do → pending → in_progress → done
 ```
 
-Hanya satu langkah ke depan yang diizinkan. Lompatan (`to_do → done`) dan mundur (`done → to_do`) ditolak dengan 409 dan pesan yang menjelaskan alurnya. Mengirim status yang sama dengan status saat ini tidak menghasilkan error, tidak mengubah apa pun, dan tidak membuat audit log (idempotent).
+Status dapat berpindah ke status mana pun: maju, mundur (`in_progress → pending`), melompat (`to_do → done`), atau dibuka kembali (`done → to_do`). Mengirim status yang sama dengan status saat ini tidak menghasilkan error, tidak mengubah apa pun, dan tidak membuat audit log (idempotent). Urutan `to_do → pending → in_progress → done` hanya menjadi urutan tampilan di UI.
 
 ### Audit log
 
@@ -109,7 +109,7 @@ Dengan begitu status task dan audit log selalu sinkron, baik di memori maupun di
 ### Frontend
 
 - `App.tsx` memegang state dan memanggil API. Setelah setiap mutasi, data dimuat ulang dari backend (backend adalah sumber kebenaran).
-- `TaskList` menampilkan status (badge + indikator progres), tombol "→ status berikutnya", tombol History, dan Delete.
+- `TaskList` menampilkan status (badge), dropdown untuk mengubah status ke status mana pun, tombol History, dan Delete.
 - `AuditLogPanel` tampil sebagai baris yang bisa dibuka per task, dengan kalimat seperti:
   `User "john.doe" changed Task "Prepare Invoice" status from "Pending" to "In Progress"` beserta waktunya.
 - Dropdown **Acting as** menentukan actor untuk create, ubah status, dan delete.
@@ -119,7 +119,7 @@ Dengan begitu status task dan audit log selalu sinkron, baik di memori maupun di
 ## Asumsi
 
 1. **Tidak ada auth.** Actor dipilih dari dropdown dan hanya divalidasi terhadap daftar hardcoded. Ini sesuai spesifikasi, tetapi berarti siapa pun bisa mengaku sebagai siapa pun.
-2. **Alur status strict.** Setiap perubahan harus satu langkah. Tidak ada tombol "reopen" atau "cancel".
+2. **Status bebas berpindah.** Perubahan tidak dibatasi urutan, sesuai permintaan terbaru. Spesifikasi asli hanya mengizinkan urutan maju satu langkah; keputusan ini membalik aturan tersebut dan tetap dicatat di audit log.
 3. **Log pembuatan task ikut dicatat** (`task_created`), dan penghapusan juga dicatat (`task_deleted`). Keduanya tidak diwajibkan, tetapi membuat riwayat lengkap.
 4. **Judul maksimal 120 karakter, deskripsi maksimal 1000.** Ini batas wajar untuk UI dan body request dibatasi 32 KB.
 5. **Satu instans backend.** Data disimpan di satu file JSON.
@@ -148,7 +148,7 @@ Dengan begitu status task dan audit log selalu sinkron, baik di memori maupun di
 1. **Storage**: pindah ke SQLite atau PostgreSQL. Audit log menjadi tabel append-only dengan trigger yang menolak `UPDATE`/`DELETE`, dan `sequence` diberi constraint unik.
 2. **Auth**: login sederhana (atau SSO internal) sehingga actor berasal dari identitas, bukan dropdown.
 3. **Pagination dan filter** pada daftar task dan audit log.
-4. **Optimistic concurrency**: field `version` pada task, dikirim di request, sehingga dua user yang mengubah task yang sama tidak saling menimpa (saat ini cukup ditangani oleh aturan transisi).
+4. **Optimistic concurrency**: field `version` pada task, dikirim di request, sehingga dua user yang mengubah task yang sama tidak saling menimpa (saat ini tidak ada pengecekan versi, sehingga last-write-wins berlaku).
 5. **Test end-to-end** frontend (Playwright) dan CI.
 6. **Idempotency key** untuk `POST /tasks` agar retry jaringan tidak membuat task ganda.
 7. **Real-time update** (SSE) agar daftar ter-refresh saat user lain mengubah task.
@@ -173,7 +173,7 @@ Batasannya: seseorang dengan akses tulis ke file bisa menulis ulang seluruh chai
 - **Penulisan seluruh file setiap mutasi.** Ukuran file dan waktu tulis tumbuh linear. Dengan banyak user dan banyak task, ini menjadi bottleneck dan membuat latensi naik.
 - **Serialisasi di satu proses.** Antrian memastikan konsistensi, tetapi semua mutasi antre di satu titik. Jika backend di-scale ke beberapa instance, setiap instance punya antrian dan salinan data sendiri, sehingga data bisa saling menimpa. Ini adalah risiko terbesar secara arsitektur.
 - **Tidak ada auth.** Actor bisa dipalsukan oleh siapa pun. Untuk tim internal ini diterima, tetapi tidak untuk penggunaan yang lebih luas.
-- **Frontend tidak tahu versi task.** Dua user yang membuka task sama bisa melihat status lama, lalu salah satu menekan tombol dan mendapat 409. Pesannya jelas, tetapi tetap membingungkan.
+- **Frontend tidak tahu versi task.** Dua user yang membuka task sama bisa melihat status lama. Perubahan terakhir menang tanpa peringatan, tetapi setiap perubahan tetap tercatat di audit log sehingga bisa ditelusuri.
 
 ### Jika task ini berkembang menjadi sistem besar, bagian mana yang di-refactor lebih dulu dan kenapa?
 
@@ -186,11 +186,11 @@ Batasannya: seseorang dengan akses tulis ke file bisa menulis ulang seluruh chai
 
 ## Penggunaan AI
 
-AI digunakan untuk membantu menulis sebagian besar kode awal, termasuk struktur backend, komponen React, dan test. Keputusan desain (alur status strict, hash chain, antrian mutasi, pemisahan route/service/persistence) dan trade-off di atas adalah keputusan yang harus dipahami dan dijelaskan oleh pengembang.
+AI digunakan untuk membantu menulis sebagian besar kode awal, termasuk struktur backend, komponen React, dan test. Keputusan desain (status bebas berpindah, hash chain, antrian mutasi, pemisahan route/service/persistence) dan trade-off di atas adalah keputusan yang harus dipahami dan dijelaskan oleh pengembang.
 
 Cara validasi:
 
-- **Test otomatis**: 15 test di backend mencakup aturan transisi, idempotensi, validasi input, append-only audit log, persistensi setelah restart, deteksi tampering, dan request paralel. Test sempat gagal (hang) karena Express 4 tidak meneruskan error dari handler `async`; masalah ini ditemukan lewat test lalu diperbaiki dengan upgrade ke Express 5.
+- **Test otomatis**: 14 test di backend mencakup aturan transisi (termasuk mundur dan lompat), idempotensi, validasi input, append-only audit log, persistensi setelah restart, deteksi tampering, dan request paralel. Test sempat gagal (hang) karena Express 4 tidak meneruskan error dari handler `async`; masalah ini ditemukan lewat test lalu diperbaiki dengan upgrade ke Express 5.
 - **Pemeriksaan tipe**: `tsc --noEmit` pada backend dan frontend, plus `vite build`.
-- **Uji manual API**: membuat task, mengubah status valid dan tidak valid, memverifikasi hash chain lewat endpoint, dan memastikan proxy frontend meneruskan request ke backend.
+- **Uji manual API**: membuat task, mengubah status maju, mundur, dan lompat, serta status yang sama, memverifikasi hash chain lewat endpoint, dan memastikan proxy frontend meneruskan request ke backend.
 - **Review kode**: setiap bagian dibaca ulang untuk memastikan konsistensi antara domain, service, dan UI (misalnya, pesan error dan label status).

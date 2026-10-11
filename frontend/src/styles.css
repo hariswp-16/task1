@@ -31,9 +31,6 @@ button.link { background: none; border: none; color: #2563eb; padding: 0; text-d
 .badge-pending { background: #fef3c7; color: #92400e; }
 .badge-in_progress { background: #dbeafe; color: #1e40af; }
 .badge-done { background: #dcfce7; color: #166534; }
-.stepper { display: flex; gap: 4px; list-style: none; padding: 0; margin: 8px 0 0; }
-.stepper li { width: 28px; height: 6px; border-radius: 3px; background: #e5e7eb; }
-.stepper li.reached { background: #2563eb; }
 .audit-row td { background: #f9fafb; }
 .audit-list { margin: 0; padding-left: 20px; display: flex; flex-direction: column; gap: 8px; }
 .audit-list li { font-size: .92rem; }

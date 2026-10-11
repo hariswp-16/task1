@@ -42,12 +42,13 @@ test("alur API end-to-end", async () => {
   assert.equal(same.status, 200);
   assert.equal(same.json.changed, false);
 
-  const bad = await call("PUT", `/api/tasks/${id}/status`, { status: "done", actor: "jane.smith" });
-  assert.equal(bad.status, 409);
-  assert.equal(bad.json.error.code, "INVALID_TRANSITION");
+  const back = await call("PUT", `/api/tasks/${id}/status`, { status: "in_progress", actor: "jane.smith" });
+  assert.equal(back.status, 200);
+  assert.equal(back.json.data.status, "in_progress");
+  assert.equal(back.json.changed, true);
 
   const logs = await call("GET", `/api/tasks/${id}/audit-logs`);
-  assert.equal(logs.json.data.length, 2);
+  assert.equal(logs.json.data.length, 3);
 
   const verify = await call("GET", "/api/audit-logs/verify");
   assert.equal(verify.json.data.valid, true);
@@ -55,7 +56,7 @@ test("alur API end-to-end", async () => {
   const del = await call("DELETE", `/api/tasks/${id}`, { actor: "john.doe" });
   assert.equal(del.status, 204);
   const afterDelete = await call("GET", `/api/tasks/${id}/audit-logs`);
-  assert.equal(afterDelete.json.data.length, 3);
+  assert.equal(afterDelete.json.data.length, 4);
 });
 
 test("error API: validasi dan 404", async () => {

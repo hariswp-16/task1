@@ -4,7 +4,7 @@ import { checkTransition, isTaskStatus, type TaskStatus } from "../domain/status
 import type { AuditLog, DatabaseState, Task } from "../domain/types.js";
 import { computeAuditHash, GENESIS_HASH, verifyAuditChain } from "../persistence/auditChain.js";
 import type { Database } from "../persistence/database.js";
-import { invalidTransition, notFound, validationError } from "../errors.js";
+import { notFound, validationError } from "../errors.js";
 
 const MAX_TITLE_LENGTH = 120;
 const MAX_DESCRIPTION_LENGTH = 1000;
@@ -87,9 +87,6 @@ export class TaskService {
       if (check.kind === "unchanged") {
         // Idempotent: no state change and no new audit log.
         return { task, changed: false };
-      }
-      if (check.kind === "forbidden") {
-        throw invalidTransition(check.reason);
       }
 
       const now = new Date().toISOString();
